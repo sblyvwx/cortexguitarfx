@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Script kept with LF line endings for POSIX execution.
 
 import argparse
 import binascii

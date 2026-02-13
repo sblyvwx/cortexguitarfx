@@ -2,8 +2,8 @@
 #define __GLOBAL_CONFIG_H_
 
 
-// uncomment if compiling for useage with the stomp extension board
-#define EXTENSION_BOARD
+// uncomment if compiling for usage with the stomp extension board
+// #define EXTENSION_BOARD
 
 // #define WAVESHARE_64X128_DISPLAY
 #define JOYIT_128X64_DISPLAY

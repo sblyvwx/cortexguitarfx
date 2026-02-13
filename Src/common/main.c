@@ -323,10 +323,13 @@ int main(void)
 	ticStart=0;
 	programsToInitialize[0]=0xFF;
 
-	#ifdef WM8731
+	#ifdef I2S_INPUT
 	initI2SSlave();
 	#else
-	initI2SSlave();
+	initI2S();
+	// Use ADC channel 0 (GPIO26) as audio input in no-codec mode
+	initDoubleBufferedReading(0);
+	enableAudioInput(1);
 	#endif
     /* Loop forever */
 	for(;;)

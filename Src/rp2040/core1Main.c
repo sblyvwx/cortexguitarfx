@@ -78,7 +78,9 @@ void core1Main()
     #ifdef EXTENSION_BOARD
     initStompSwitchesInterface();
     #endif
+    #ifdef I2S_INPUT
     initRoundRobinReading(); // internal adc for reading parameters
+    #endif
 
     setAsOuput(CLIPPING_LED_INPUT);
     setAsOuput(CLIPPING_LED_OUTPUT);

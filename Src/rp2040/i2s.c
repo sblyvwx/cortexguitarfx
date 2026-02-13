@@ -108,7 +108,8 @@ void initI2S()
 						| (2 << DMA_CH2_CTRL_TRIG_DATA_SIZE_LSB) // always read left and right at once
 						| (1 << DMA_CH2_CTRL_TRIG_EN_LSB);
 
-	// adc input
+	#ifdef I2S_INPUT
+	// adc input via i2s rx
 	*DMA_CH3_READ_ADDR = (uint32_t)PIO1_SM0_RXF;
 	*DMA_CH3_WRITE_ADDR = dbfrInputPtr + (uint32_t)i2sDoubleBufferIn;
 	*DMA_CH3_TRANS_COUNT = AUDIO_BUFFER_SIZE;
@@ -118,6 +119,7 @@ void initI2S()
 						| (1 << DMA_CH3_CTRL_TRIG_EN_LSB);
 
 	*DMA_INTE0 |= (1 << 3) | (1 << 2); // assert dma for channel 3 since the adc channel is always finished halb a bitclock cycle later
+	#endif
 
 	#ifndef I2S_INPUT
 	*PIO1_INTE |= (1 << PIO_IRQ0_INTE_SM0_LSB);
@@ -253,7 +255,8 @@ void initI2SSlave()
 						| (2 << DMA_CH2_CTRL_TRIG_DATA_SIZE_LSB) // always read left and right at once
 						| (1 << DMA_CH2_CTRL_TRIG_EN_LSB);
 
-	// adc input
+	#ifdef I2S_INPUT
+	// adc input via i2s rx
 	*DMA_CH3_READ_ADDR = (uint32_t)PIO1_SM0_RXF;
 	*DMA_CH3_WRITE_ADDR = dbfrInputPtr + (uint32_t)i2sDoubleBufferIn;
 	*DMA_CH3_TRANS_COUNT = AUDIO_BUFFER_SIZE;
@@ -263,6 +266,7 @@ void initI2SSlave()
 						| (1 << DMA_CH3_CTRL_TRIG_EN_LSB);
 
 	*DMA_INTE0 |= (1 << 3); // | (1 << 2); // assert dma for channel 3 since the adc channel is always finished halb a bitclock cycle later
+	#endif
 
 	// enable PIO1 SM0
 	*PIO1_CTRL |= (1 << (PIO_CTRL_SM_ENABLE_LSB+0));

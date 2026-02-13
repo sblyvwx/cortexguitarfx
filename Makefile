@@ -17,7 +17,7 @@ OBJCPY=arm-none-eabi-objcopy
 ELF2UF2=./tools/elf2uf2
 OPT=-Og
 PAD_CKECKSUM=./tools/pad_checksum
-DEFINES=-DRP2040_FEATHER -DI2S_INPUT -DCS4270 
+DEFINES=-DRP2040_FEATHER
 CARGS=-fno-builtin -g $(DEFINES) -mcpu=cortex-m0plus -mthumb -ffunction-sections -fdata-sections -std=gnu11 -Wall -I./Inc/RpiPico -I./Inc -I./Inc/gen -I./Src/tusb
 LARGS=-g -Xlinker -print-memory-usage -mcpu=cortex-m0plus -mthumb -T./rp2040_feather.ld -Xlinker -Map="./out/$(PROJECT).map" -Xlinker --gc-sections -static --specs="nano.specs" -Wl,--start-group -lc -lm -Wl,--end-group
 LARGS_BS2=-nostdlib -T ./bs2_default.ld -Xlinker -Map="./out/bs2_default.map"
@@ -114,7 +114,7 @@ bs2_code_size: bs2_code.bin
 	@echo '**********************************'
 
 bootstage2.S: bs2_code.bin out
-	$(PAD_CKECKSUM) -s 0xffffffff ./out/bs2_code.bin ./out/bootstage2.S
+	python3 $(PAD_CKECKSUM) -s 0xffffffff ./out/bs2_code.bin ./out/bootstage2.S
 
 # rp2040 feather startup stage
 pico_startup2.o: out
@@ -185,8 +185,9 @@ Src/rp2040/simple_timertest.c: Inc/gen/pio0_pio.h
 Src/rp2040/ds18b20.c: Inc/gen/pio0_pio.h
 
 # pio assembler
-Inc/gen/pio0_pio.h: Inc/gen tools/pioasm
-	./tools/pioasm -o c-sdk ./Src/rp2040/pio0.pio ./Inc/gen/pio0_pio.h
+Inc/gen/pio0_pio.h: Inc/gen tools/pioasm out
+	tr -d '\r' < ./Src/rp2040/pio0.pio > ./out/pio0_unix.pio
+	./tools/pioasm -o c-sdk ./out/pio0_unix.pio ./Inc/gen/pio0_pio.h
 
 Inc/gen/version.h: Inc/gen
 #REV=`expr %REV% / 60`
