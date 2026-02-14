@@ -27,6 +27,9 @@ extern volatile uint8_t programChangeState;
 #define OVERLAY_NR_FWUPDATE 2
 #define OVERLAY_NR_MAX 2
 
+/* 0 = not confirming, 1 = confirm Yes, 2 = confirm No */
+static volatile uint8_t fwUpdateConfirm = 0;
+
 static void initGeneratedPresetToCurrentFx(PiPicoFxUiType*data,FxPresetType* preset,uint8_t pos)
 {
     generateEmptyPreset(preset,currentBank,pos);
@@ -116,9 +119,36 @@ static void enterCallback(PiPicoFxUiType*data)
         }
         else if (overlayNr == OVERLAY_NR_FWUPDATE)
         {
-            drawImage(0,0,&fwupdateScreen_streamimg,imgBuffer);
-            OledDisplayImageStandardAdressing(0,0,128,8,imgBuffer->data);
-            reset_usb_boot(1 << 17,2);
+            if (fwUpdateConfirm == 0)
+            {
+                /* Show confirmation dialog */
+                fwUpdateConfirm = 2;
+                clearSquareInt(0,0,128,43,imgBuffer);
+                *strbfr=0;
+                appendToString(strbfr,"FW Update");
+                drawText(0,8,strbfr,imgBuffer,(void*)0);
+                *strbfr=0;
+                appendToString(strbfr,"Are you sure?");
+                drawText(0,24,strbfr,imgBuffer,(void*)0);
+                *strbfr=0;
+                appendToString(strbfr,"> No");
+                drawText(0,40,strbfr,imgBuffer,(void*)0);
+            }
+            else if (fwUpdateConfirm == 1)
+            {
+                /* Confirmed Yes — reboot into bootloader */
+                drawImage(0,0,&fwupdateScreen_streamimg,imgBuffer);
+                OledDisplayImageStandardAdressing(0,0,128,8,imgBuffer->data);
+                reset_usb_boot(1 << 17,2);
+            }
+            else
+            {
+                /* Selected No — cancel and go back to overlay menu */
+                fwUpdateConfirm = 0;
+                create(data);
+                drawImage(41,0,overlays[overlayNr],imgBuffer);
+                uiStackPush(data,0xFF);
+            }
         }
     }
 
@@ -133,6 +163,7 @@ static void exitCallback(PiPicoFxUiType*data)
     // remove overlay menu (if there)
     if (overlayNr != 0xFF)
     {
+        fwUpdateConfirm = 0;
         clearSquare(0.0f,0.0f,128.0f,43.0f,imgBuffer);
         *(strbfr) = 0;
         appendToString(strbfr,"Bank:");
@@ -163,6 +194,32 @@ static void rotaryCallback(int16_t encoderDelta,PiPicoFxUiType*data)
     // change overlay icon (if there)
     if (overlayNr != 0xFF)
     {
+        if (fwUpdateConfirm != 0)
+        {
+            /* Toggle between Yes (1) and No (2) */
+            BwImageType* imgBuf = getImageBuffer();
+            char tbfr[8];
+            if (fwUpdateConfirm == 1)
+            {
+                fwUpdateConfirm = 2;
+            }
+            else
+            {
+                fwUpdateConfirm = 1;
+            }
+            clearSquareInt(0,32,128,48,imgBuf);
+            *tbfr = 0;
+            if (fwUpdateConfirm == 1)
+            {
+                appendToString(tbfr,"> Yes");
+            }
+            else
+            {
+                appendToString(tbfr,"> No");
+            }
+            drawText(0,40,tbfr,imgBuf,(void*)0);
+            return;
+        }
         if (encoderDelta > 0)
         {
             overlayNr++;
