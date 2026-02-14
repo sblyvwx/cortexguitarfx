@@ -27,6 +27,7 @@ static void create(PiPicoFxUiType*data)
     {
         drawText(0,16,data->currentParameter->name,imgBuffer,0);
     }
+    OledwriteFramebufferAsync(imgBuffer->data);
 }
 
 static void update(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUiType*data)

@@ -4,6 +4,8 @@
 #define PARAMETER_NAME_MAXLEN 16
 #define FXPROGRAM_NAME_MAXLEN 24
 #define FXPROGRAM_MAX_PARAMETERS 8
+#define FX_PRESET_CHAIN_SLOTS 3
+#define FX_PRESET_STORAGE_BYTES 128
 
 #ifndef FLOAT_AUDIO
 typedef int16_t(*processSampleCallback)(int16_t,void*);
@@ -40,16 +42,22 @@ typedef struct {
 typedef struct __attribute__((__packed__)) {
     uint8_t bankPos : 3; // position within the bank
     uint8_t bankNr : 5; // the bank number
-    uint8_t programNr; // the fx Program used in the preset
+    uint8_t programNr; // active slot program cache (legacy compatibility)
     uint8_t ledColor; // 0: off, 1: red, 2: green, 3: red+green 
     char name[24]; // the name of the preset
-    uint16_t parameters[8];
+    uint16_t parameters[8]; // active slot parameter cache (legacy compatibility)
+    uint8_t activeSlot;
+    uint8_t slotProgramNr[FX_PRESET_CHAIN_SLOTS];
+    uint16_t slotParameters[FX_PRESET_CHAIN_SLOTS][FXPROGRAM_MAX_PARAMETERS];
     uint16_t magicNr; // a magic number/checksum which identifies the memory loaded as a preset
 } FxPresetType;
+
+extern volatile uint8_t activeProgramChain[FX_PRESET_CHAIN_SLOTS];
 
 void savePreset(FxPresetType* preset,uint16_t presetPos);
 uint8_t loadPreset(FxPresetType* preset,uint16_t presetPos);
 void applyPreset(FxPresetType* preset,FxProgramType ** programs);
 void parametersToPreset(FxPresetType* preset,FxProgramType ** programs);
 void generateEmptyPreset(FxPresetType* preset,uint8_t bank,uint8_t pos);
+void setPresetActiveSlot(FxPresetType* preset,uint8_t slot);
 #endif

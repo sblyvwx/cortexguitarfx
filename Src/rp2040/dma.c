@@ -179,7 +179,16 @@ void isr_c0_dma_irq0_irq11()
 			#else
 			if (programChangeState != 3) // processing
 			{
-				outputSample = piPicoUiController.currentProgram->processSample(inputSample,piPicoUiController.currentProgram->data);
+				int16_t chainSample = inputSample;
+				for (uint8_t s=0;s<FX_PRESET_CHAIN_SLOTS;s++)
+				{
+					uint8_t programIdx = activeProgramChain[s];
+					if (programIdx < N_FX_PROGRAMS)
+					{
+						chainSample = fxPrograms[programIdx]->processSample(chainSample,fxPrograms[programIdx]->data);
+					}
+				}
+				outputSample = chainSample;
 			}
 			else
 			{

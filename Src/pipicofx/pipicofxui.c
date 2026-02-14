@@ -13,7 +13,7 @@
 
 static BwImageBufferType imgBuffer;
 static BwImageType img;
-const uiEnterFct uiEnterFunctions[]={&enterLevel0, &enterLevel1, &enterLevel2, &enterLevel3, &enterLevel4, &enterLevel5};
+const uiEnterFct uiEnterFunctions[]={&enterLevel0, &enterLevel1, &enterLevel2, &enterLevel3, &enterLevel4, &enterLevel5, &enterLevel6, &enterLevel7};
 
 
 /*
@@ -314,6 +314,11 @@ void piPicoFxUiSetup(PiPicoFxUiType* piPicoUiController)
     piPicoUiController->locked=0;
     piPicoUiController->editViaRotary =1;
     piPicoUiController->uiLevelStackPtr = 0;
+    activeProgramChain[0] = piPicoUiController->currentProgramIdx;
+    for (uint8_t c=1;c<FX_PRESET_CHAIN_SLOTS;c++)
+    {
+        activeProgramChain[c] = N_FX_PROGRAMS-1;
+    }
     for (uint8_t c=0;c<8;c++)
     {
         *(piPicoUiController->uiLevelStack + c) = 0xFF;

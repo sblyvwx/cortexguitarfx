@@ -5,30 +5,36 @@
 #include "drivers/adc.h"
 #include "pipicofx/pipicofxui.h"
 #include "images/editOverlay.h"
-#include "images/settingsOverlay.h"
 #include "images/fwUpgradeOverlay.h"
 #include "images/aboutoverlay.h"
 #include "images/fwupdateScreen.h"
 #include "romfunc.h"
 #include "pipicofx/fxPrograms.h"
 #include "stringFunctions.h"
-#include "drivers/stompswitches.h"
 #include "gen/version.h"
 
 extern FxPresetType presets[3];
 extern uint8_t currentBank;
 extern uint8_t currentPreset;
 static volatile uint8_t overlayNr=0xFF;
-static volatile uint8_t bankChanged=0; // flag indicating that the bank has been changed upon stomp switch release
-                                       // used to prohob action when the second stomp switch is released
-const BwImageType* overlays[]={&editOverlay_streamimg, &settingsOverlay_streamimg, &aboutoverlay_streamimg, &fwUpgradeOverlay_streamimg};
+/* Settings overlay removed: CS4270 codec requires extension board */
+const BwImageType* overlays[]={&editOverlay_streamimg, &aboutoverlay_streamimg, &fwUpgradeOverlay_streamimg};
 extern volatile uint8_t programsToInitialize[3];
 extern volatile uint8_t programChangeState;
 
 #define OVERLAY_NR_EDIT 0
-#define OVERLAY_NR_SYSTEMSETTINGS 1
-#define OVERLAY_NR_ABOUT 2
-#define OVERLAY_NR_FWUPDATE 3
+#define OVERLAY_NR_ABOUT 1
+#define OVERLAY_NR_FWUPDATE 2
+#define OVERLAY_NR_MAX 2
+
+static void initGeneratedPresetToCurrentFx(PiPicoFxUiType*data,FxPresetType* preset,uint8_t pos)
+{
+    generateEmptyPreset(preset,currentBank,pos);
+    setPresetActiveSlot(preset,0);
+    preset->programNr = data->currentProgramIdx;
+    parametersToPreset(preset,fxPrograms);
+    applyPreset(preset,fxPrograms);
+}
 
 static void create(PiPicoFxUiType*data)
 {
@@ -91,10 +97,6 @@ static void enterCallback(PiPicoFxUiType*data)
         {
             enterLevel4(data);
         }
-        else if (overlayNr == OVERLAY_NR_SYSTEMSETTINGS)
-        {
-            enterLevel5(data);
-        }
         else if (overlayNr == OVERLAY_NR_ABOUT)
         {
             clearSquareInt(0,0,128,43,imgBuffer);
@@ -142,9 +144,14 @@ static void exitCallback(PiPicoFxUiType*data)
         drawText(5,42,strbfr,imgBuffer,font);
         overlayNr=0xFF;
     }
-    else // remove ui level switching blocker
+    else
     {
-        uiStackPop(data);
+        // If a temporary blocker is still present, remove it so the global
+        // exit dispatcher can return to the previous level.
+        if (uiStackCurrent(data) == 0xFF)
+        {
+            uiStackPop(data);
+        }
     }
 }
 
@@ -159,15 +166,15 @@ static void rotaryCallback(int16_t encoderDelta,PiPicoFxUiType*data)
         if (encoderDelta > 0)
         {
             overlayNr++;
-            if (overlayNr > 3)
+            if (overlayNr > OVERLAY_NR_MAX)
             {
-                overlayNr=3;
+                overlayNr=OVERLAY_NR_MAX;
             }
         }
         else
         {
             overlayNr--;
-            if (overlayNr > 3)
+            if (overlayNr > OVERLAY_NR_MAX)
             {
                 overlayNr=0;
             }
@@ -193,203 +200,30 @@ static void rotaryCallback(int16_t encoderDelta,PiPicoFxUiType*data)
             //data->currentParameterIdx=0;
             //data->currentParameter = data->currentProgram->parameters;
         }
-        setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
         applyPreset(presets + currentPreset,fxPrograms);
         create(data);
     }     
-}
-
-static void stompswitch1Callback(PiPicoFxUiType* data)
-{
-    uint8_t nbStompSwitch;
-    if (bankChanged == 0)
-    {
-        nbStompSwitch=getStompSwitchState(1);
-        if ((nbStompSwitch & 0x1) == 0x1)
-        {
-            bankChanged = 1;
-            currentBank--;
-            if (currentBank > 31)
-            {
-                currentBank = 0;
-            }
-            if (loadPreset(presets,currentBank*3)!=0)
-            {
-                generateEmptyPreset(presets,currentBank,0);
-            }
-            if (loadPreset(presets+1,currentBank*3+1)!=0)
-            {
-                generateEmptyPreset(presets+1,currentBank,1);
-            }
-            if (loadPreset(presets+2, currentBank*3+2)!=0)
-            {
-                generateEmptyPreset(presets+2,currentBank,2);
-            }
-        }
-        else
-        {
-            if (currentPreset != 0)
-            {
-                currentPreset = 0;
-                if (data->currentProgramIdx != presets[currentPreset].programNr)
-                {
-                    programsToInitialize[0]=presets[currentPreset].programNr;
-                    programChangeState = 1;
-                }
-                setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
-                applyPreset(presets + currentPreset,fxPrograms);    
-            }
-        }
-        create(data);
-    }
-    else
-    {
-        bankChanged = 0;
-    }
-}
-
-static void stompswitch2Callback(PiPicoFxUiType* data)
-{
-    uint8_t nbStompSwitch1, nbStompSwitch3;
-    if (bankChanged == 0)
-    {
-        nbStompSwitch1=getStompSwitchState(0);
-        nbStompSwitch3=getStompSwitchState(2);
-        if (((nbStompSwitch1 & 0x1) == 0x1) && ((nbStompSwitch3 & 0x1) == 0x0))
-        {
-            bankChanged = 1;
-            currentBank--;
-            if (currentBank > 31)
-            {
-                currentBank = 0;
-            }
-            if (loadPreset(presets,currentBank*3)!=0)
-            {
-                generateEmptyPreset(presets,currentBank,0);
-            }
-            if (loadPreset(presets+1,currentBank*3+1)!=0)
-            {
-                generateEmptyPreset(presets+1,currentBank,1);
-            }
-            if (loadPreset(presets+2, currentBank*3+2)!=0)
-            {
-                generateEmptyPreset(presets+2,currentBank,2);
-            }
-        }
-        else if (((nbStompSwitch1 & 0x1) == 0x0) && ((nbStompSwitch3 & 0x1) == 0x1))
-        {
-            bankChanged = 1;
-            currentBank++;
-            if (currentBank > 31)
-            {
-                currentBank = 31;
-            }
-            if (loadPreset(presets,currentBank*3)!=0)
-            {
-                generateEmptyPreset(presets,currentBank,0);
-            }
-            if (loadPreset(presets+1,currentBank*3+1)!=0)
-            {
-                generateEmptyPreset(presets+1,currentBank,1);
-            }
-            if (loadPreset(presets+2, currentBank*3+2)!=0)
-            {
-                generateEmptyPreset(presets+2,currentBank,2);
-            }
-        }
-        else
-        {
-            if (currentPreset != 1)
-            {
-                currentPreset = 1;
-                if (data->currentProgramIdx != presets[currentPreset].programNr)
-                {
-                    programsToInitialize[0]=presets[currentPreset].programNr;
-                    programChangeState = 1;
-                }
-                setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
-                applyPreset(presets + currentPreset,fxPrograms);
-            }
-        }
-        create(data);
-    }
-    else
-    {
-        bankChanged = 0;
-    }
-}
-
-static void stompswitch3Callback(PiPicoFxUiType* data)
-{
-    uint8_t nbStompSwitch;
-    if (bankChanged == 0)
-    {
-        nbStompSwitch=getStompSwitchState(1);
-        if ((nbStompSwitch & 0x1) == 0x1)
-        {
-            bankChanged = 1;
-            currentBank++;
-            if (currentBank > 31)
-            {
-                currentBank = 31;
-            }
-            if (loadPreset(presets,currentBank*3)!=0)
-            {
-                generateEmptyPreset(presets,currentBank,0);
-            }
-            if (loadPreset(presets+1,currentBank*3+1)!=0)
-            {
-                generateEmptyPreset(presets+1,currentBank,1);
-            }
-            if (loadPreset(presets+2, currentBank*3+2)!=0)
-            {
-                generateEmptyPreset(presets+2,currentBank,2);
-            }
-        }
-        else
-        {
-            if (currentPreset != 2)
-            {
-                currentPreset = 2;
-                if (data->currentProgramIdx != presets[currentPreset].programNr)
-                {
-                    programsToInitialize[0]=presets[currentPreset].programNr;
-                    programChangeState = 1;
-                }
-                setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
-                applyPreset(presets + currentPreset,fxPrograms);
-            }
-        }
-        create(data);
-    }
-    else
-    {
-        bankChanged = 0;
-    }
 }
 
 void enterLevel3(PiPicoFxUiType*data)
 {
     if (loadPreset(presets,currentBank*3)!=0)
     {
-        generateEmptyPreset(presets,currentBank,0);
+        initGeneratedPresetToCurrentFx(data,presets,0);
     }
     if (loadPreset(presets+1,currentBank*3+1)!=0)
     {
-        generateEmptyPreset(presets+1,currentBank,1);
+        initGeneratedPresetToCurrentFx(data,presets+1,1);
     }
     if (loadPreset(presets+2, currentBank*3+2)!=0)
     {
-        generateEmptyPreset(presets+2,currentBank,2);
+        initGeneratedPresetToCurrentFx(data,presets+2,2);
     }
     data->editViaRotary = 1;
     clearCallbackAssignments();
     registerEnterButtonPressedCallback(&enterCallback);
     registerExitButtonPressedCallback(&exitCallback);
     registerRotaryCallback(&rotaryCallback);
-    registerStompswitch1ReleasedCallback(&stompswitch1Callback);
-    registerStompswitch2ReleasedCallback(&stompswitch2Callback);
-    registerStompswitch3ReleasedCallback(&stompswitch3Callback);
     registerOnUpdateCallback(&update);
     registerOnCreateCallback(&create);
     create(data);
@@ -399,7 +233,6 @@ void enterLevel3(PiPicoFxUiType*data)
         programsToInitialize[0]=presets[currentPreset].programNr;
         programChangeState = 1;
     }
-    setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
     applyPreset(presets + currentPreset, fxPrograms);
 }
 

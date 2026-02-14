@@ -8,13 +8,12 @@
 #include "romfunc.h"
 #include "pipicofx/fxPrograms.h"
 #include "stringFunctions.h"
-#include "drivers/stompswitches.h"
 
 uint8_t locksymbol[5]={0b01111000,0b01111110,0b01111001,0b01111110,0b01111000 };
 BwImageType lock;
 extern volatile uint8_t programsToInitialize[3];
 extern volatile uint8_t programChangeState;
-extern const uint8_t stompswitch_progs[];
+extern volatile uint8_t activeProgramChain[];
 extern FxPresetType presets[3];
 extern uint8_t currentBank;
 extern uint8_t currentPreset;
@@ -130,11 +129,8 @@ static void enterCallback(PiPicoFxUiType*data)
     {
         return;
     }
-    if (data->locked == 0)
-    {
-        uiStackPush(data, 0);
-        enterLevel1(data);
-    }
+    uiStackPush(data, 0);
+    enterLevel1(data);
 }
 
 static void exitCallback(PiPicoFxUiType*data)
@@ -143,19 +139,19 @@ static void exitCallback(PiPicoFxUiType*data)
     // apply current program and parameters to preset when coming from 4
     if(uiStackCurrent(data)==4)
     {
+        setPresetActiveSlot(presets + currentPreset,presets[currentPreset].activeSlot);
         presets[currentPreset].programNr = data->currentProgramIdx;
-        for (uint8_t c=0;c<fxPrograms[presets[currentPreset].programNr]->nParameters;c++)
-        {
-            if (fxPrograms[presets[currentPreset].programNr]->parameters[c].control<0xFF)
-            {
-                presets[currentPreset].parameters[c] = fxPrograms[presets[currentPreset].programNr]->parameters[c].rawValue;
-            }
-        }
+        parametersToPreset(presets + currentPreset,fxPrograms);
+        applyPreset(presets + currentPreset,fxPrograms);
     }
     else
     {
-        data->locked ^= 0x1;
-        create(data);
+        // Encoder+2-button mode: Exit from Level0 opens preset view.
+        // Push return level (0) and a temporary blocker (0xFF) so the
+        // global exit dispatcher does not immediately pop back.
+        uiStackPush(data, 0);
+        uiStackPush(data, 0xFF);
+        enterLevel3(data);
     }
 
 }
@@ -176,33 +172,24 @@ static void rotaryCallback(int16_t encoderDelta,PiPicoFxUiType*data)
         data->currentProgram = fxPrograms[data->currentProgramIdx];
         data->currentParameterIdx=0;
         data->currentParameter = data->currentProgram->parameters;
+
+        if (presets[currentPreset].activeSlot >= FX_PRESET_CHAIN_SLOTS)
+        {
+            presets[currentPreset].activeSlot = 0;
+        }
+        setPresetActiveSlot(presets + currentPreset,presets[currentPreset].activeSlot);
+        presets[currentPreset].programNr = data->currentProgramIdx;
         parametersToPreset(presets + currentPreset,fxPrograms);
+
+        /* Trigger the fade-out / reset / fade-in state machine so the new
+         * program is properly initialised before the DMA ISR uses it.    */
+        programsToInitialize[0] = data->currentProgramIdx;
+        programChangeState = 1;
+
+        applyPreset(presets + currentPreset,fxPrograms);
     }
     create(data);
 }
-
-static void genericStompSwitchCallback(uint8_t switchNr, PiPicoFxUiType* data)
-{
-    currentPreset = switchNr;
-    uiStackPush(data, 0);
-    enterLevel3(data);
-}
-
-static void stompswitch1Callback(PiPicoFxUiType* data)
-{
-    genericStompSwitchCallback(0,data);
-}
-
-static void stompswitch2Callback(PiPicoFxUiType* data)
-{
-    genericStompSwitchCallback(1,data);
-}
-
-static void stompswitch3Callback(PiPicoFxUiType* data)
-{
-    genericStompSwitchCallback(2,data);
-}
-
 
 /*
 register exit, rotary, knobs and stompswitch callbacks
@@ -211,13 +198,25 @@ register onUpdate, on Create
 */
 void enterLevel0(PiPicoFxUiType*data)
 {
+    if (presets[currentPreset].activeSlot >= FX_PRESET_CHAIN_SLOTS)
+    {
+        presets[currentPreset].activeSlot = 0;
+    }
+    setPresetActiveSlot(presets + currentPreset,presets[currentPreset].activeSlot);
+    if (presets[currentPreset].programNr >= N_FX_PROGRAMS)
+    {
+        presets[currentPreset].programNr = N_FX_PROGRAMS-1;
+    }
+    data->currentProgramIdx = presets[currentPreset].programNr;
+    data->currentProgram = fxPrograms[data->currentProgramIdx];
+    data->currentParameterIdx = 0;
+    data->currentParameter = data->currentProgram->parameters;
+    data->locked = 0;
+
     clearCallbackAssignments();
     registerEnterButtonPressedCallback(&enterCallback);
     registerExitButtonPressedCallback(&exitCallback);
     registerRotaryCallback(&rotaryCallback);
-    registerStompswitch1ReleasedCallback(&stompswitch1Callback);
-    registerStompswitch2ReleasedCallback(&stompswitch2Callback);
-    registerStompswitch3ReleasedCallback(&stompswitch3Callback);
     registerOnUpdateCallback(&update);
     registerOnCreateCallback(&create);
     create(data);

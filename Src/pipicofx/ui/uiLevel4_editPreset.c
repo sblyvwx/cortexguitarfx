@@ -9,12 +9,10 @@
 #include "romfunc.h"
 #include "pipicofx/fxPrograms.h"
 #include "stringFunctions.h"
-#include "drivers/stompswitches.h"
 
-#define EDITLEVEL_PROGRAM 0
-#define EDITLEVEL_LEDCOLOR 1
-#define EDITLEVEL_PARAMETERS 2
-#define EDITLEVEL_NAME 3
+#define EDITLEVEL_CHAIN 0
+#define EDITLEVEL_PARAMETERS 1
+#define EDITLEVEL_MAX EDITLEVEL_PARAMETERS
 
 extern FxPresetType presets[3];
 extern uint8_t currentBank;
@@ -22,10 +20,8 @@ extern uint8_t currentPreset;
 extern volatile uint8_t programsToInitialize[3];
 extern volatile uint8_t programChangeState;
 
-static volatile uint8_t editType; // 0: Program
-                                  // 1: Led Color
-                                  // 2: Parameters 
-static volatile uint8_t exitState=0; // 0: Exit pressed the first time, 1: save and exit, 2: revert and exit
+static volatile uint8_t editType; // 0: Chain
+                                  // 1: Parameters
 
 static void create(PiPicoFxUiType*data)
 {
@@ -38,40 +34,17 @@ static void create(PiPicoFxUiType*data)
     drawText(5,21,strbfr,imgBuffer,font);
     switch (editType)
     {
-        case EDITLEVEL_PROGRAM:
+        case EDITLEVEL_CHAIN:
             *(strbfr) = 0;    
-            appendToString(strbfr,"Select Program");
-            break;
-        case EDITLEVEL_LEDCOLOR:
-            *(strbfr) = 0;    
-            appendToString(strbfr,"Led Color");
+            appendToString(strbfr,"Edit Chain");
             break;
         case EDITLEVEL_PARAMETERS:
             *(strbfr) = 0;    
             appendToString(strbfr,"Edit Params");
             break;    
-        case EDITLEVEL_NAME:
-            *(strbfr) = 0;    
-            appendToString(strbfr,"Edit Name");
-            break;    
     }
     font = getGFXFont(FREESANS9PT7B);
     drawText(5,42,strbfr,imgBuffer,font);
-    switch (exitState)
-    {
-        case 1:
-            *strbfr = 0;
-            appendToString(strbfr,"Save? Yes");
-            drawText(5,60,strbfr,imgBuffer,font);
-            break;
-        case 2:
-            *strbfr = 0;
-            appendToString(strbfr,"Save? No");
-            drawText(5,60,strbfr,imgBuffer,font);
-            break;
-        default:
-            break;
-    }
 }
 
 static void update(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUiType*data)
@@ -83,108 +56,57 @@ static void update(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUi
 
 static void enterCallback(PiPicoFxUiType*data) 
 {
-    
     switch (editType)
     {
-        case EDITLEVEL_PROGRAM:
+        case EDITLEVEL_CHAIN:
             uiStackPush(data,4);
-            data->locked = 0;
-            enterLevel0(data);
-            break;
-        case EDITLEVEL_LEDCOLOR:
-            presets[currentPreset].ledColor++;
-            presets[currentPreset].ledColor &= 0x3;
-            if (presets[currentPreset].ledColor == 0)
-            {
-                presets[currentPreset].ledColor++;
-            }
-            setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
+            enterLevel7(data);
             break;
         case EDITLEVEL_PARAMETERS:
+            if (presets[currentPreset].activeSlot >= FX_PRESET_CHAIN_SLOTS)
+            {
+                presets[currentPreset].activeSlot = 0;
+            }
+            setPresetActiveSlot(presets + currentPreset,presets[currentPreset].activeSlot);
+            data->currentProgramIdx = presets[currentPreset].programNr;
+            data->currentProgram = fxPrograms[data->currentProgramIdx];
             if (data->currentProgram->nParameters > 0)
             {
                 uiStackPush(data,4);
-                data->locked = 1;
                 data->currentParameterIdx = 0;
                 data->currentParameter = data->currentProgram->parameters + data->currentParameterIdx;
                 enterLevel1(data);
             }
             break;
-        case EDITLEVEL_NAME:
-            uiStackPush(data,4);
-            presets[currentPreset].name[23]=0;
-            data->data = presets[currentPreset].name;
-            enterLevel6(data);
-
     }
 }
 
 static void exitCallback(PiPicoFxUiType*data)
 {
-    if (exitState == 0)
-    {
-        uiStackPush(data,0xFF);
-        exitState=1;
-        create(data);
-    }
-    else if (exitState == 1)
-    {
-        uiStackPop(data);
-        savePreset(presets+currentPreset,currentBank*3 + currentPreset);
-        exitState = 0;
-    }
-    else if (exitState == 2)
-    {
-        uiStackPop(data);
-        if (loadPreset(presets+currentPreset,currentBank*3 + currentPreset)!=0)
-        {
-            generateEmptyPreset(presets+currentPreset,currentBank,currentPreset);
-        }
-        if (data->currentProgramIdx != presets[currentPreset].programNr)
-        {
-            programsToInitialize[0] = presets[currentPreset].programNr;
-            programChangeState = 1;
-        }
-        applyPreset(presets+currentPreset,fxPrograms);
-        exitState =  0;   
-    }
+    /* No save dialog — preset persistence requires extension board EEPROM.
+     * Just let the global exit dispatcher handle navigation back.        */
+    (void)data;
 }
 
 static void rotaryCallback(int16_t encoderDelta,PiPicoFxUiType*data)
 {
-    if (exitState == 0)
+    if (encoderDelta > 0)
     {
-        if (encoderDelta > 0)
+        editType++;
+        if (editType > EDITLEVEL_MAX)
         {
-            editType++;
-            if (editType > 3)
-            {
-                editType = 3;
-            }
-        }
-        else if (encoderDelta < 0)
-        {
-            editType--;
-            if (editType > 3)
-            {
-                editType = 0;
-            }
-        }
-        create(data);
-    }
-    else
-    {
-        if (encoderDelta > 0 && exitState == 1)
-        {
-            exitState = 2;
-            create(data);
-        }
-        else if (encoderDelta < 0 && exitState == 2)
-        {
-            exitState = 1;
-            create(data);
+            editType = EDITLEVEL_MAX;
         }
     }
+    else if (encoderDelta < 0)
+    {
+        editType--;
+        if (editType > EDITLEVEL_MAX)
+        {
+            editType = 0;
+        }
+    }
+    create(data);
 }
 
 

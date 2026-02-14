@@ -192,6 +192,7 @@
 #include "drivers/multicore.h"
 #include "core1Main.h"
 #include "pipicofx/fxPrograms.h"
+#include "pipicofx/picofxCore.h"
 #include "pipicofx/pipicofxui.h"
 
 volatile uint32_t task=0;
@@ -306,6 +307,19 @@ int main(void)
 	
 	piPicoFxUiSetup(&piPicoUiController);
 	OledClearDisplay();
+
+	/* Initialise presets to sensible defaults before any UI code uses them.
+	 * Without this the zero-initialised slotProgramNr[1..2] would point to
+	 * program 0 (amp model) instead of Off, causing all 3 chain slots to
+	 * activate when applyPreset is called.                                  */
+	for (uint8_t c=0;c<3;c++)
+	{
+		generateEmptyPreset(&presets[c],currentBank,c);
+	}
+	/* slot 0 of the first preset should start with the default program */
+	presets[0].slotProgramNr[0] = 0;
+	presets[0].programNr = 0;
+
 	for (uint8_t c=0;c<N_FX_PROGRAMS;c++)
 	{
 		if ((uint32_t)fxPrograms[c]->setup != 0)
@@ -321,7 +335,10 @@ int main(void)
 
 	ticEnd=0;
 	ticStart=0;
-	programsToInitialize[0]=0xFF;
+	for (uint8_t c=0;c<3;c++)
+	{
+		programsToInitialize[c]=0xFF;
+	}
 
 	#ifdef I2S_INPUT
 	initI2SSlave();
