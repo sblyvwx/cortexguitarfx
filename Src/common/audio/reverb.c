@@ -149,22 +149,27 @@ int16_t reverbProcessSample(int16_t sampleIn,ReverbType*reverbData)
     int16_t reverbSignal;
     int32_t sampleInterm;
     volatile uint32_t *  audioStatePtr = getAudioStatePtr();
+    const uint16_t * delayInSamples = reverbParameterSet[reverbData->paramNr].delayInSamples;
+    const int16_t dpMasked = reverbData->delayPointer & 0xFFF;
 
     reverbSignal = 0;
 
     for (uint8_t rc=0;rc < 4;rc++)
     {
         sampleInterm = sampleIn + 
-        ((((reverbData->delayPointers[rc][(reverbData->delayPointer-reverbParameterSet[reverbData->paramNr].delayInSamples[rc]) & 0xFFF] >> 1) + 
-           (reverbData->delayPointers[rc][(reverbData->delayPointer-reverbParameterSet[reverbData->paramNr].delayInSamples[rc]-1) & 0xFFF] >> 1))
-        *(reverbData->feedbackValues[0])) >> 15);
-        reverbData->delayPointers[rc][reverbData->delayPointer & 0xFFF] = (int16_t)clip(sampleInterm,audioStatePtr);
+        ((((reverbData->delayPointers[rc][(dpMasked-delayInSamples[rc]) & 0xFFF] >> 1) + 
+           (reverbData->delayPointers[rc][(dpMasked-delayInSamples[rc]-1) & 0xFFF] >> 1))
+        *(reverbData->feedbackValues[rc])) >> 15);
+        reverbData->delayPointers[rc][dpMasked] = (int16_t)clip(sampleInterm,audioStatePtr);
     }
     reverbData->delayPointer++;
     
-    for (uint8_t c=0;c<4;c++)
     {
-        reverbSignal += reverbData->delayPointers[c][(reverbData->delayPointer-reverbParameterSet[reverbData->paramNr].delayInSamples[c]) & 0xFFF] >> 2;
+        const int16_t dpNext = reverbData->delayPointer & 0xFFF;
+        for (uint8_t c=0;c<4;c++)
+        {
+            reverbSignal += reverbData->delayPointers[c][(dpNext-delayInSamples[c]) & 0xFFF] >> 2;
+        }
     }
 
     for (uint8_t c=0;c<4;c++)

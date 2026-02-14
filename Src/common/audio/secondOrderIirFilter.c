@@ -14,7 +14,7 @@ void initSecondOrderIirFilter(SecondOrderIirFilterType* data)
     data->acc=0;
 }
 
-
+#ifndef RP2040_FEATHER
 int16_t secondOrderIirFilterProcessSample(int16_t sampleIn,SecondOrderIirFilterType*data)
 {
     int16_t res;
@@ -40,6 +40,7 @@ int16_t secondOrderIirFilterProcessSample(int16_t sampleIn,SecondOrderIirFilterT
 
     return res;
 }
+#endif
 
 void secondOrderIirFilterReset(SecondOrderIirFilterType*data)
 {

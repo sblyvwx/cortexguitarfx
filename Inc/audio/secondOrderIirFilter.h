@@ -10,7 +10,35 @@ typedef struct
 } SecondOrderIirFilterType;
 
 void initSecondOrderIirFilter(SecondOrderIirFilterType* data);
-
-int16_t secondOrderIirFilterProcessSample(int16_t sampleIn,SecondOrderIirFilterType*data);
 void secondOrderIirFilterReset(SecondOrderIirFilterType*data);
+
+#ifdef RP2040_FEATHER
+static inline __attribute__((always_inline)) int16_t secondOrderIirFilterProcessSample(int16_t sampleIn,SecondOrderIirFilterType*data)
+{
+    int16_t res;
+    data->acc += data->coeffB[0]*sampleIn;
+    data->acc += data->coeffB[1]*data->x1;
+    data->acc += data->coeffB[2]*data->x2;
+    data->acc -= data->coeffA[0]*data->y1;
+    data->acc -= data->coeffA[1]*data->y2;
+    if (data->acc > ((1 << 29)-1))
+    {
+        data->acc = ((1 << 29)-1); 
+    }   
+    if (data->acc < -(1 << 29))
+    {
+        data->acc = -(1 << 29);
+    }
+    res = (int16_t)(data->acc >> 14);
+    data->x2 = data->x1;
+    data->x1 = sampleIn;
+    data->y2 = data->y1;
+    data->y1 = res;
+    data->acc &= ((1 << 14)-1);
+    return res;
+}
+#else
+int16_t secondOrderIirFilterProcessSample(int16_t sampleIn,SecondOrderIirFilterType*data);
+#endif
+
 #endif
