@@ -27,6 +27,7 @@ static void create(PiPicoFxUiType*data)
     {
         drawText(0,16,data->currentParameter->name,imgBuffer,0);
     }
+    OledwriteFramebufferAsync(imgBuffer->data);
 }
 
 static void update(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUiType*data)
@@ -68,20 +69,25 @@ static void exitCallback(PiPicoFxUiType*data)
 
 static void rotaryCallback(int16_t encoderDelta,PiPicoFxUiType*data)
 {
+    int16_t newRaw;
     if (data->currentProgram->nParameters == 0 || data->currentParameter == 0 || data->currentParameter->setParameter == 0)
     {
         return;
     }
-    data->currentParameter->rawValue += encoderDelta*data->currentParameter->increment;
-    if (data->currentParameter->rawValue < 0)
+    newRaw = data->currentParameter->rawValue + encoderDelta*data->currentParameter->increment;
+    if (newRaw < 0)
     {
-        data->currentParameter->rawValue = 0;
+        newRaw = 0;
     }
-    else if  (data->currentParameter->rawValue > ((1 << 12)-1))
+    else if  (newRaw > ((1 << 12)-1))
     {
-        data->currentParameter->rawValue = ((1 << 12)-1);
+        newRaw = ((1 << 12)-1);
     }
-    data->currentParameter->setParameter(data->currentParameter->rawValue,data->currentProgram->data);
+    /* Call setParameter first — many callbacks overwrite rawValue with a
+     * mapped/converted value.  We restore the raw accumulator afterwards
+     * so that the next rotary increment starts from the correct position. */
+    data->currentParameter->setParameter((uint16_t)newRaw,data->currentProgram->data);
+    data->currentParameter->rawValue = newRaw;
 }
 
 void enterLevel2(PiPicoFxUiType*data)
