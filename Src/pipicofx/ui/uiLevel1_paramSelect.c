@@ -19,12 +19,24 @@ static void create(PiPicoFxUiType*data)
     BwImageType* imgBuffer = getImageBuffer();
     clearImage(imgBuffer);
     drawText(0,8,data->currentProgram->name,imgBuffer,0);
-    drawText(0,16,data->currentParameter->name,imgBuffer,0);
+    if (data->currentProgram->nParameters == 0 || data->currentParameter == 0)
+    {
+        drawText(0,16,"No parameters",imgBuffer,0);
+    }
+    else
+    {
+        drawText(0,16,data->currentParameter->name,imgBuffer,0);
+    }
 }
 
 static void update(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUiType*data)
 {
     BwImageType * img=getImageBuffer();
+    if (data->currentProgram->nParameters == 0 || data->currentParameter == 0 || data->currentParameter->getParameterDisplay == 0)
+    {
+        OledwriteFramebufferAsync(img->data);
+        return;
+    }
     clearSquareInt(0,16,128,64,img);
     float fValue,fMaxValue,fMinValue;
     char paramValueBfr[16];
@@ -52,6 +64,10 @@ static void update(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUi
 
 static void enterCallback(PiPicoFxUiType*data) 
 {
+    if (data->currentProgram->nParameters == 0 || data->currentParameter == 0)
+    {
+        return;
+    }
     if (data->currentParameter->control == 0xFF || data->editViaRotary != 0)
     {
         uiStackPush(data, 1);
@@ -64,41 +80,12 @@ static void exitCallback(PiPicoFxUiType*data)
     parametersToPreset(presets+currentPreset,fxPrograms);
 }
 
-static inline void knobCallback(uint16_t val,PiPicoFxUiType*data,uint8_t control)
-{
-    if (data->locked == 0)
-    {
-        for (uint8_t c=0;c<data->currentProgram->nParameters;c++)
-        {
-            if (data->currentProgram->parameters[c].control==control)
-            {
-                data->currentProgram->parameters[c].setParameter(val,data->currentProgram->data);
-                data->currentProgram->parameters[c].rawValue = (int16_t)val;
-
-            }
-        }  
-    } 
-}
-
-
-static void knob0Callback(uint16_t val,PiPicoFxUiType*data)
-{
-    knobCallback(val,data,0);
-}
-
-static void knob1Callback(uint16_t val,PiPicoFxUiType*data)
-{
-    knobCallback(val,data,1);
-}
-
-static void knob2Callback(uint16_t val,PiPicoFxUiType*data)
-{
-    knobCallback(val,data,2);
-}
-
-
 static void rotaryCallback(int16_t encoderDelta,PiPicoFxUiType*data)
 {
+    if (data->currentProgram->nParameters == 0)
+    {
+        return;
+    }
     data->currentParameterIdx += encoderDelta;
     if (data->currentParameterIdx >= data->currentProgram->nParameters && encoderDelta > 0)
     {
@@ -114,13 +101,15 @@ static void rotaryCallback(int16_t encoderDelta,PiPicoFxUiType*data)
 
 void enterLevel1(PiPicoFxUiType*data)
 {
+    if (data->currentProgram->nParameters == 0)
+    {
+        enterLevel0(data);
+        return;
+    }
     clearCallbackAssignments();
     registerEnterButtonPressedCallback(&enterCallback);
     registerExitButtonPressedCallback(&exitCallback);
     registerRotaryCallback(&rotaryCallback);
-    registerKnob0Callback(&knob0Callback);
-    registerKnob1Callback(&knob1Callback);
-    registerKnob2Callback(&knob2Callback);
     registerOnUpdateCallback(&update);
     create(data);
 }

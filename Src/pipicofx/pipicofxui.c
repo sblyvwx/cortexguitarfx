@@ -158,13 +158,18 @@ void onEnterReleased(PiPicoFxUiType*data)
 
 void onExitPressed(PiPicoFxUiType*data)
 {
+    uint8_t nextLevel;
     if (exitButtonPressedCallback!=0)
     {
         exitButtonPressedCallback(data);
     }
     if(uiStackCurrent(data) != 0xFF)
     {
-        uiEnterFunctions[uiStackPop(data)](data);
+        nextLevel = uiStackPop(data);
+        if (nextLevel < (sizeof(uiEnterFunctions)/sizeof(uiEnterFunctions[0])))
+        {
+            uiEnterFunctions[nextLevel](data);
+        }
     }
 }
 

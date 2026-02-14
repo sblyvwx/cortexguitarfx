@@ -237,7 +237,7 @@ static void stompswitch1Callback(PiPicoFxUiType* data)
                     programChangeState = 1;
                 }
                 setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
-                applyPreset(presets,fxPrograms);    
+                applyPreset(presets + currentPreset,fxPrograms);    
             }
         }
         create(data);
@@ -308,7 +308,7 @@ static void stompswitch2Callback(PiPicoFxUiType* data)
                     programChangeState = 1;
                 }
                 setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
-                applyPreset(presets,fxPrograms);
+                applyPreset(presets + currentPreset,fxPrograms);
             }
         }
         create(data);
@@ -357,7 +357,7 @@ static void stompswitch3Callback(PiPicoFxUiType* data)
                     programChangeState = 1;
                 }
                 setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
-                applyPreset(presets,fxPrograms);
+                applyPreset(presets + currentPreset,fxPrograms);
             }
         }
         create(data);
@@ -400,6 +400,6 @@ void enterLevel3(PiPicoFxUiType*data)
         programChangeState = 1;
     }
     setStompswitchColorRaw(presets[currentPreset].ledColor << (currentPreset << 1));
-    applyPreset(presets, fxPrograms);
+    applyPreset(presets + currentPreset, fxPrograms);
 }
 
