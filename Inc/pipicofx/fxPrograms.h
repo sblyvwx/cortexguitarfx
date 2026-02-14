@@ -19,7 +19,7 @@
 #include "pipicofx/picofxCore.h"
 
 
-#define N_FX_PROGRAMS 12
+#define N_FX_PROGRAMS 18
 
 #define FXPROGRAM6_DELAY_TIME_LOWPASS_T 2
 
@@ -236,6 +236,58 @@ typedef struct
 } FxProgram15DataType;
 
 
+typedef struct {
+    uint32_t lfoPhase;
+    uint32_t lfoPhaseinc;
+    int16_t depth;       // 0-4095 mapped to modulation depth
+    int16_t lfoVal;
+    uint8_t waveform;    // 0=sine, 1=triangle, 2=square
+    uint8_t lfoQuadrant; // for triangle wave
+} FxProgram16DataType;
+
+typedef struct {
+    FirstOrderIirDualCoeffLPType envelopeFollower;
+    int16_t currentEnvelope;
+    int16_t threshold;
+    int16_t hysteresis;
+    int16_t currentGain;
+    int16_t attackRate;
+    int16_t releaseRate;
+    uint16_t holdCounter;
+    uint16_t holdTime;
+    uint8_t gateState; // 0=closed, 1=attack, 2=open, 3=hold, 4=release
+} FxProgram17DataType;
+
+typedef struct {
+    int16_t x1[8];
+    int16_t y1[8];
+    int16_t coeff;
+    uint8_t nStages;
+    uint32_t lfoPhase;
+    uint32_t lfoPhaseinc;
+    int16_t depth;
+    int16_t feedback;
+    int16_t feedbackSample;
+    int16_t minCoeff;
+    int16_t maxCoeff;
+} FxProgram18DataType;
+
+typedef struct {
+    int16_t x1, x2, y1, y2;
+    int32_t acc;
+    int32_t coeffA[2];
+    int32_t coeffB[3];
+    FirstOrderIirDualCoeffLPType envelopeFollower;
+    int16_t currentEnvelope;
+    int16_t sensitivity;
+    int16_t minFreq;
+    int16_t maxFreq;
+    int16_t q;
+    int16_t mix;
+    uint8_t coeffUpdateCnt;
+} FxProgram19DataType;
+
+
 extern FxProgramType fxProgram1;
 extern FxProgramType fxProgram2;
 extern FxProgramType fxProgram3;
@@ -251,6 +303,10 @@ extern FxProgramType fxProgram12;
 extern FxProgramType fxProgram13;
 extern FxProgramType fxProgram14;
 extern FxProgramType fxProgram15;
+extern FxProgramType fxProgram16;
+extern FxProgramType fxProgram17;
+extern FxProgramType fxProgram18;
+extern FxProgramType fxProgram19;
 extern FxProgramType* fxPrograms[N_FX_PROGRAMS];
 
 #endif

@@ -31,6 +31,12 @@ FxProgramType* fxPrograms[N_FX_PROGRAMS]={
     &fxProgram10, // reverb
     &fxProgram12, // allpass reverb
     &fxProgram13, // hadamard diffusor reverb
+    &fxProgram4, // amp model 2 (oversampling)
+    &fxProgram5, // bitcrusher
+    &fxProgram16, // tremolo
+    &fxProgram17, // noise gate
+    &fxProgram18, // phaser
+    &fxProgram19, // envelope filter
     &fxProgram3 // Off
     };
 
