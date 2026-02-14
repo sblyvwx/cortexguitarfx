@@ -6,6 +6,7 @@
 #include "hardware/regs/addressmap.h"
 #include "hardware/regs/adc.h"
 #include "hardware/regs/clocks.h"
+#include "hardware/regs/io_bank0.h"
 #include "hardware/regs/pads_bank0.h"
 #include "hardware/regs/m0plus.h"
 #include "hardware/regs/dma.h" 
@@ -18,6 +19,22 @@ volatile uint32_t audioInputState;
 extern uint32_t task;
 
 volatile uint16_t adcChannel0Value, adcChannel1Value, adcChannel2Value;
+
+static inline void configureAdcChannelPin(uint8_t channelnr)
+{
+    volatile uint32_t* adcPinCtrl;
+    volatile uint32_t* adcPadCtrl;
+
+    // ADC channel 0..3 are GPIO26..29
+    adcPinCtrl = (volatile uint32_t*)(IO_BANK0_BASE + IO_BANK0_GPIO0_CTRL_OFFSET + 8 * (26 + channelnr));
+    *adcPinCtrl = (*adcPinCtrl & ~(IO_BANK0_GPIO0_CTRL_FUNCSEL_BITS))
+        | (IO_BANK0_GPIO0_CTRL_FUNCSEL_VALUE_NULL << IO_BANK0_GPIO0_CTRL_FUNCSEL_LSB);
+
+    // Disable pulls and digital input buffer, disable output driver for analog operation
+    adcPadCtrl = (PADS_ADC0 + channelnr);
+    *adcPadCtrl &= ~((1 << PADS_BANK0_GPIO26_PUE_LSB) | (1 << PADS_BANK0_GPIO26_PDE_LSB) | (1 << PADS_BANK0_GPIO26_IE_LSB));
+    *adcPadCtrl |= (1 << PADS_BANK0_GPIO26_OD_LSB);
+}
 
 void isr_c1_adc_fifo_irq22()
 {
@@ -102,9 +119,8 @@ uint16_t readChannel(uint8_t channelnr)
 
 void initDoubleBufferedReading(uint8_t channelnr)
 {
-    // setup pads
-    *(PADS_ADC0 + channelnr) |= (1 << PADS_BANK0_GPIO26_IE_LSB);
-    *(PADS_ADC0 + channelnr) &= ~(1 << PADS_BANK0_GPIO26_OD_LSB);
+    // setup analog input pad
+    configureAdcChannelPin(channelnr);
 
     // set samping rate
     //*ADC_DIV=((F_ADC_USB/AUDIO_SAMPLING_RATE) - 1) << 8; 
@@ -129,13 +145,10 @@ void initDoubleBufferedReading(uint8_t channelnr)
 
 void initRoundRobinReading()
 {
-    // setup pads
-    *(PADS_ADC0 + 0) &= ~(1 << PADS_BANK0_GPIO26_PDE_LSB);
-    //*(PADS_ADC0 + 0) &= ~(1 << PADS_BANK0_GPIO26_OD_LSB);
-    *(PADS_ADC0 + 1) &= ~(1 << PADS_BANK0_GPIO26_PDE_LSB);
-    //*(PADS_ADC0 + 1) &= ~(1 << PADS_BANK0_GPIO26_OD_LSB);
-    *(PADS_ADC0 + 2) &= ~(1 << PADS_BANK0_GPIO26_PDE_LSB);
-    //*(PADS_ADC0 + 2) &= ~(1 << PADS_BANK0_GPIO26_OD_LSB);
+    // setup analog input pads
+    configureAdcChannelPin(0);
+    configureAdcChannelPin(1);
+    configureAdcChannelPin(2);
 
     // set update frequency
     *ADC_DIV= 0xFFFF << 8; //((F_ADC_USB/(UI_UPDATE_RATE*3)) - 1) << 8; 

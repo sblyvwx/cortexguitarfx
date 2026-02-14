@@ -307,7 +307,7 @@ void piPicoFxUiSetup(PiPicoFxUiType* piPicoUiController)
     piPicoUiController->currentParameter=fxPrograms[piPicoUiController->currentProgramIdx]->parameters;
     piPicoUiController->currentParameterIdx=0;
     piPicoUiController->locked=0;
-    piPicoUiController->editViaRotary =0;
+    piPicoUiController->editViaRotary =1;
     piPicoUiController->uiLevelStackPtr = 0;
     for (uint8_t c=0;c<8;c++)
     {
