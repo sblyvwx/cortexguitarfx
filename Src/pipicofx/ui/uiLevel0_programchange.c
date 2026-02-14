@@ -66,11 +66,16 @@ static void update(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUi
 {
     BwImageType bargraph;
     BwImageType* imgBuffer = getImageBuffer();
+    char stateBuffer[4] = "S0";
     uint8_t bargraphBuffer[128];
     bargraph.data = bargraphBuffer;
     bargraph.sx=128;
     bargraph.sy = 8;
     bargraph.type=BWIMAGE_BW_IMAGE_STRUCT_VERTICAL_BYTES;
+
+    (void)data;
+    stateBuffer[1] = (char)('0' + (programChangeState % 10));
+
     // show basic display
     for (uint8_t c=0;c<128;c++)
     {
@@ -110,6 +115,10 @@ static void update(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUi
         }
     }
     drawImage(0,3*8,&bargraph,imgBuffer);
+
+    // Draw state overlay on a guaranteed visible line (same page as CPU bar).
+    // If cpuLoad is very low, this will still be readable.
+    drawText(104,3*8,stateBuffer,imgBuffer,0);
 
     OledwriteFramebufferAsync(imgBuffer->data);
 }

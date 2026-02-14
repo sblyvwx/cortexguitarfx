@@ -14,6 +14,11 @@
 #include "pipicofx/pipicofxui.h"
 #include "audio/audiotools.h"
 #include "drivers/oled_display.h"
+#include "audio/sineplayer.h"
+
+#ifndef AUDIO_DIAG_TONE
+#define AUDIO_DIAG_TONE 0
+#endif
 
 int16_t* audioBufferPtr;
 #ifndef I2S_INPUT
@@ -22,6 +27,9 @@ uint16_t* audioBufferInputPtr;
 int16_t* audioBufferInputPtr;
 #endif
 int16_t inputSample, outputSample;
+static int16_t dcBlockPrevIn = 0;
+static int32_t dcBlockPrevOut = 0;
+#define DC_BLOCK_R 32700  /* ~0.998 in Q15, HPF cutoff ~15 Hz at 47 kHz */
 
 #define AVERAGING_LOWPASS_CUTOFF 10
 
@@ -58,6 +66,21 @@ void initDMA()
  */
 void isr_c0_dma_irq0_irq11()
 {
+	#if AUDIO_DIAG_TONE
+	if ((*DMA_INTS0 & (1<<2))==(1 << 2)) // channel 2: i2s tx block done -> refill next block with sine
+	{
+		*DMA_INTS0 = (1<<2);
+		toggleAudioBuffer();
+		audioBufferPtr = getEditableAudioBuffer();
+		for (uint8_t c=0;c<AUDIO_BUFFER_SIZE;c++)
+		{
+			outputSample = getNextSineValue() >> 1;
+			*((uint32_t*)audioBufferPtr+c) = ((uint16_t)outputSample << 16) | (0xFFFF & (uint16_t)outputSample);
+		}
+		return;
+	}
+	#endif
+
 	/*
 	if ((*DMA_INTS0 & (1<<0))==(1 << 0)) // if from channel 0: neopixel  frame timer
 	{
@@ -77,6 +100,10 @@ void isr_c0_dma_irq0_irq11()
 	}
 	else if ((*DMA_INTS0 & (1<<3))==(1 << 3) ) // from channel 3: toogle audio input buffer, handled by core0
 	{
+		#if AUDIO_DIAG_TONE
+		*DMA_INTS0 = (1<<3);
+		return;
+		#else
 		*DMA_INTS0 = (1<<3);
 		// disable other dma interrupts when processing audio
 		*NVIC_ICER = (1 << 11);
@@ -108,7 +135,27 @@ void isr_c0_dma_irq0_irq11()
 		{
 			// convert raw input to signed 16 bit
 			#ifndef I2S_INPUT
-			inputSample = (*(audioBufferInputPtr + c) << 4) - 0x7FFF;
+			{
+				// Oversampled ADC: average ADC_OVERSAMPLE_FACTOR raw samples
+				// to improve effective resolution and lower the noise floor.
+				int32_t adcSum = 0;
+				for (uint8_t k = 0; k < ADC_OVERSAMPLE_FACTOR; k++) {
+					adcSum += (int32_t)(*(audioBufferInputPtr + c * ADC_OVERSAMPLE_FACTOR + k) & 0x0FFF) - 2048;
+				}
+				int16_t rawSigned = (int16_t)((adcSum >> ADC_OVERSAMPLE_SHIFT) << 4);
+
+				// DC-blocking high-pass filter: y[n] = x[n] - x[n-1] + R*y[n-1]
+				// Removes any DC offset without hard-gate artifacts.
+				{
+					int32_t dcOut = (int32_t)rawSigned - (int32_t)dcBlockPrevIn
+					              + ((dcBlockPrevOut * DC_BLOCK_R) >> 15);
+					dcBlockPrevIn = rawSigned;
+					if (dcOut > 32767) dcOut = 32767;
+					if (dcOut < -32768) dcOut = -32768;
+					dcBlockPrevOut = dcOut;
+					inputSample = (int16_t)dcOut;
+				}
+			}
 			#else
 			inputSample=*(audioBufferInputPtr + c*2 + 1) + *(audioBufferInputPtr + c*2);
 			#endif
@@ -127,6 +174,9 @@ void isr_c0_dma_irq0_irq11()
 			}
 			avgInOld = ((AVERAGING_LOWPASS_CUTOFF*avgIn) >> 15) + (((32767-AVERAGING_LOWPASS_CUTOFF)*avgInOld) >> 15);
 
+			#if AUDIO_DIAG_TONE
+			outputSample = getNextSineValue() >> 1;
+			#else
 			if (programChangeState != 3) // processing
 			{
 				outputSample = piPicoUiController.currentProgram->processSample(inputSample,piPicoUiController.currentProgram->data);
@@ -135,6 +185,7 @@ void isr_c0_dma_irq0_irq11()
 			{
 				outputSample = 0;
 			}
+			#endif
 			if (programChangeState == 2)// fadeout
 			{
 				outputSample = ((32767 - fadeCounter)*inputSample >> 15) + ((fadeCounter*outputSample) >> 15);
@@ -160,14 +211,15 @@ void isr_c0_dma_irq0_irq11()
 				programChangeState = 2;
 			}
 
-			if (inputSample < 0)
+			if (outputSample < 0)
 			{
-				avgOut = -inputSample;
+				avgOut = -outputSample;
 			}
 			else
 			{
-				avgOut = inputSample;
+				avgOut = outputSample;
 			}
+
 			avgOutOld = ((AVERAGING_LOWPASS_CUTOFF*avgOut) >> 15) + (((32767-AVERAGING_LOWPASS_CUTOFF)*avgOutOld) >> 15);
 
 			*((uint32_t*)audioBufferPtr+c) = ((uint16_t)outputSample << 16) | (0xFFFF & (uint16_t)outputSample); 
@@ -186,6 +238,7 @@ void isr_c0_dma_irq0_irq11()
 		}
 		// re-enable dma interrupts
 		*NVIC_ISER = (1 << 11);
+		#endif
 	}
 	return;
 }

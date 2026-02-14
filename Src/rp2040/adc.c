@@ -122,8 +122,19 @@ void initDoubleBufferedReading(uint8_t channelnr)
     // setup analog input pad
     configureAdcChannelPin(channelnr);
 
-    // set samping rate
-    //*ADC_DIV=((F_ADC_USB/AUDIO_SAMPLING_RATE) - 1) << 8; 
+    // Run ADC at ADC_OVERSAMPLE_FACTOR × the I2S sample rate so that
+    // we can average multiple raw readings per audio frame, lowering
+    // the effective noise floor (about +3 dB for each doubling).
+    // I2S rate: fs = F_SYS / (I2S_CLKDIV_DBL_INT*256 + I2S_CLKDIV_DBL_FRAC)
+    {
+        uint32_t i2sSamplingRate;
+        i2sSamplingRate = F_SYS / ((I2S_CLKDIV_DBL_INT << 8) + I2S_CLKDIV_DBL_FRAC);
+        *ADC_DIV = ((F_ADC_USB / (i2sSamplingRate * ADC_OVERSAMPLE_FACTOR)) - 1) << 8;
+    }
+
+    // ensure single selected channel (disable round-robin here)
+    *ADC_CS &= ~(0x1F << ADC_CS_RROBIN_LSB);
+    *ADC_CS = (*ADC_CS & ~(0x7 << ADC_CS_AINSEL_LSB)) | ((channelnr & 0x7) << ADC_CS_AINSEL_LSB);
 
     // enable fifo and dreq and set thresh to 1
     *ADC_FCS = (1 << ADC_FCS_EN_LSB) | (1 << ADC_FCS_DREQ_EN_LSB) | (1 << ADC_FCS_THRESH_LSB); 

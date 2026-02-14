@@ -224,6 +224,24 @@ void core1Main()
            clearStickyIncrementDelta();
        }
 
+        if (programChangeState == 3)
+        {
+            clearDelayLine();
+            if (programsToInitialize[0] != 0xFF)
+            {
+                if (fxPrograms[programsToInitialize[0]]->reset != 0)
+                {
+                    fxPrograms[programsToInitialize[0]]->reset(fxPrograms[programsToInitialize[0]]->data);
+                }
+                piPicoUiController.currentProgramIdx = programsToInitialize[0];
+                programsToInitialize[0]=0xFF;
+                piPicoUiController.currentProgram = fxPrograms[piPicoUiController.currentProgramIdx];
+                onCreate(&piPicoUiController);
+            }
+
+            programChangeState = 4;
+        }
+
        /*
         *
         * Stomp Switches Callback
@@ -262,25 +280,6 @@ void core1Main()
         {
             clearStompSwitchStickyReleased(2);
             onStompSwitch3Released(&piPicoUiController);
-        }
-
-
-        if (programChangeState == 3)
-        {
-            clearDelayLine();
-            if (programsToInitialize[0] != 0xFF)
-            {
-                if (fxPrograms[programsToInitialize[0]]->reset != 0)
-                {
-                    fxPrograms[programsToInitialize[0]]->reset(fxPrograms[programsToInitialize[0]]->data);
-                }
-                piPicoUiController.currentProgramIdx = programsToInitialize[0];
-                programsToInitialize[0]=0xFF;
-                piPicoUiController.currentProgram = fxPrograms[piPicoUiController.currentProgramIdx];
-                onCreate(&piPicoUiController);
-            }
-
-            programChangeState = 4;
         }
         requestSwitchesUpdate();
         #endif

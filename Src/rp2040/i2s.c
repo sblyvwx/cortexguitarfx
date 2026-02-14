@@ -10,8 +10,14 @@
 #include "hardware/rp2040_registers.h"
 #include "audio/audiotools.h"
 
+#ifndef AUDIO_DIAG_TONE
+#define AUDIO_DIAG_TONE 0
+#endif
 
 static int16_t i2sDoubleBuffer[AUDIO_BUFFER_SIZE*2*2];
+#if AUDIO_DIAG_TONE
+static uint32_t i2sDiagToneLut[32];
+#endif
 #ifdef I2S_INPUT
 static int16_t i2sDoubleBufferIn[AUDIO_BUFFER_SIZE*2*2];
 #endif
@@ -44,14 +50,21 @@ void initI2S()
 	| ( (i2s_duplex_wrap + first_instr_pos) << PIO_SM0_EXECCTRL_WRAP_TOP_LSB);
 
 	//  autopush and autopull
-	// shift out to left and in from right 
-	*PIO1_SM0_SHIFTCTRL = (0 << PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB) 
-                           | (1 << PIO_SM0_SHIFTCTRL_AUTOPULL_LSB) 
-                           | (0 << PIO_SM0_SHIFTCTRL_FJOIN_TX_LSB) 
+	// shift out to left and in from right
+	// NOTE: In no-codec mode (ADC input path), RX FIFO data is not consumed.
+	// Keep AUTOPUSH disabled there to avoid RX FIFO backpressure stalling TX.
+	*PIO1_SM0_SHIFTCTRL = (0 << PIO_SM0_SHIFTCTRL_PULL_THRESH_LSB)
+                           | (1 << PIO_SM0_SHIFTCTRL_AUTOPULL_LSB)
+                           | (0 << PIO_SM0_SHIFTCTRL_FJOIN_TX_LSB)
 						   | (0 << PIO_SM0_SHIFTCTRL_OUT_SHIFTDIR_LSB)
 
 						   | (0 << PIO_SM0_SHIFTCTRL_PUSH_THRESH_LSB)
-						   | (1 << PIO_SM0_SHIFTCTRL_AUTOPUSH_LSB)
+						   |
+	#ifdef I2S_INPUT
+						   (1 << PIO_SM0_SHIFTCTRL_AUTOPUSH_LSB)
+	#else
+						   (0 << PIO_SM0_SHIFTCTRL_AUTOPUSH_LSB)
+	#endif
 						   | (0 << PIO_SM0_SHIFTCTRL_FJOIN_RX_LSB)
 						   | (0 << PIO_SM0_SHIFTCTRL_IN_SHIFTDIR_LSB)
 						   ;
@@ -73,8 +86,8 @@ void initI2S()
 	  (2 << PIO_SM0_PINCTRL_SIDESET_COUNT_LSB)
 	| (1 << PIO_SM0_PINCTRL_OUT_COUNT_LSB)
     | (I2S_DATA_PIN << PIO_SM0_PINCTRL_OUT_BASE_LSB)
-	| (I2S_BCK_PIN << PIO_SM0_PINCTRL_SIDESET_BASE_LSB)
-	| (I2S_DATA_PIN << PIO_SM0_PINCTRL_SET_BASE_LSB)
+	| (I2S_WS_PIN << PIO_SM0_PINCTRL_SIDESET_BASE_LSB)
+	| (I2S_WS_PIN << PIO_SM0_PINCTRL_SET_BASE_LSB)
 	| (I2S_DATA_IN_PIN << PIO_SM0_PINCTRL_IN_BASE_LSB)
 	| (3 << PIO_SM0_PINCTRL_SET_COUNT_LSB)
     ;
@@ -100,6 +113,21 @@ void initI2S()
 	// initialize DMA
 	// dac output
 	*DMA_CH2_WRITE_ADDR = (uint32_t)PIO1_SM0_TXF;
+	#if AUDIO_DIAG_TONE
+	for (uint16_t c=0;c<32;c++)
+	{
+		int16_t sval;
+		sval = (c < 16) ? 26000 : -26000;
+		i2sDiagToneLut[c] = ((uint16_t)sval << 16) | (0xFFFF & (uint16_t)sval);
+	}
+	*DMA_CH2_READ_ADDR = (uint32_t)i2sDiagToneLut;
+	*DMA_CH2_TRANS_COUNT = 0xFFFFFFFF;
+	*DMA_CH2_CTRL_TRIG = (8 << DMA_CH2_CTRL_TRIG_TREQ_SEL_LSB)
+						| (1 << DMA_CH2_CTRL_TRIG_INCR_READ_LSB)
+						| (7 << DMA_CH2_CTRL_TRIG_RING_SIZE_LSB) // 1<<7 bytes = 32 words ring
+						| (2 << DMA_CH2_CTRL_TRIG_DATA_SIZE_LSB)
+						| (1 << DMA_CH2_CTRL_TRIG_EN_LSB);
+	#else
 	dbfrPtr = 0;
 	*DMA_CH2_READ_ADDR = dbfrPtr + (uint32_t)i2sDoubleBuffer;
 	*DMA_CH2_TRANS_COUNT = AUDIO_BUFFER_SIZE;
@@ -107,6 +135,7 @@ void initI2S()
 						| (1 << DMA_CH2_CTRL_TRIG_INCR_READ_LSB) 
 						| (2 << DMA_CH2_CTRL_TRIG_DATA_SIZE_LSB) // always read left and right at once
 						| (1 << DMA_CH2_CTRL_TRIG_EN_LSB);
+	#endif
 
 	#ifdef I2S_INPUT
 	// adc input via i2s rx
@@ -122,13 +151,17 @@ void initI2S()
 	#endif
 
 	#ifndef I2S_INPUT
-	*PIO1_INTE |= (1 << PIO_IRQ0_INTE_SM0_LSB);
+	// In free-running ADC mode (START_MANY), skip the PIO IRQ that
+	// would redundantly call startConversion() ~47 kHz, reducing
+	// digital noise during ADC sampling.
+	// *PIO1_INTE |= (1 << PIO_IRQ0_INTE_SM0_LSB);
 	#endif
 
 
+	#ifdef I2S_INPUT
 	// ***********************
 	//
-	// PIO1 STATE MACHINE 2
+	// PIO1 STATE MACHINE 2 (MCLK) — only needed when codec is present
 	//
 	// ***********************
 	// setup state machine 2 as master clock
@@ -164,11 +197,13 @@ void initI2S()
 
 	// jump to first instruction
 	*PIO1_SM2_INSTR = first_instr_pos;
+	#endif /* I2S_INPUT */
 
 	
 	#ifndef I2S_INPUT
-    // start PIO 1, state machine 0
-	*PIO1_CTRL |= (1 << (PIO_CTRL_SM_ENABLE_LSB+0));
+	// No codec: start only SM0 (I2S TX). Skip SM2 (MCLK) to avoid
+	// 12 MHz switching noise coupling into the ADC.
+	*PIO1_CTRL |= ((1 << 0) << PIO_CTRL_CLKDIV_RESTART_LSB) | (1 << (PIO_CTRL_SM_ENABLE_LSB+0)) | ((1 << 0) << PIO_CTRL_SM_RESTART_LSB);
 	#else
 	/*
 		*PIO1_CTRL = ((1 << 2) << PIO_CTRL_CLKDIV_RESTART_LSB);// | ((1 << 0) << PIO_CTRL_CLKDIV_RESTART_LSB);

@@ -121,17 +121,17 @@ jmp y-- bitloop side 0 [4]
 ;set x,0 side 0 ; put default value of 0 into x for the case the software buffer stalls
 .wrap_target
 i2s_duplex_loop_l:
-out pins,1 side 2 [4-1]
+out pins,1 side 1 [4-1]
 in pins, 1 side 3 [1-1]
 jmp y-- i2s_duplex_loop_l side 3 [3-1] 
 out pins, 1 side 0 [4-1]
-in pins, 1 side 1 [1-1]
-set y,14 side 1 [3-1]
+in pins, 1 side 2 [1-1]
+set y,14 side 2 [3-1]
 i2s_duplex_loop_r:
 out pins,1 side 0 [4-1]
-in pins,1 side 1 [1-1]
-jmp y-- i2s_duplex_loop_r side 1 [3-1] 
-out pins,1 side 2 [4-1]
+in pins,1 side 2 [1-1]
+jmp y-- i2s_duplex_loop_r side 2 [3-1] 
+out pins,1 side 1 [4-1]
 in pins,1 side 3 [1-1]
 set y,14 side 3 [3-1]
 .wrap
@@ -183,14 +183,14 @@ jmp i2s_d_s_wait_left
 ;set x,0 side 0 ; put default value of 0 into x for the case the software buffer stalls
 .wrap_target
 i2s_write_loop_l:
-out pins,1 side 2 
+out pins,1 side 1 
 jmp y-- i2s_write_loop_l side 3 
 out pins, 1 side 0 
-set y,14 side 1 
+set y,14 side 2 
 i2s_write_loop_r:
 out pins,1 side 0 
-jmp y-- i2s_write_loop_r side 1 
-out pins,1 side 2 
+jmp y-- i2s_write_loop_r side 2 
+out pins,1 side 1 
 set y,14 side 3 
 .wrap
 public is2_write_start:
