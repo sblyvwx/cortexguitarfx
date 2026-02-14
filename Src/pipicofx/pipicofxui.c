@@ -267,6 +267,62 @@ void onUpdate(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUiType*
     {
         onUpdateCallback(avgInput, avgOutput, cpuLoad, data);
     }
+    /* 3D-rotating "yvwx" in the bottom-right corner (page 7, cols 105-127).
+     * Simulates Y-axis rotation by horizontally compressing/expanding the
+     * 23-column source text through 12 frames (30° steps).  The back face
+     * shows the text reversed ("xwvy").
+     *
+     * Race-free: the update callback already started async DMA from page 0;
+     * page 7 is transferred last, so our writes land in the current frame.
+     *
+     * Cost per frame: 23 byte-clears + up to 23 byte copies via table
+     * lookup.  No function calls, no division, no floats. */
+    {
+        /* Pre-computed 23-column source: y(5) gap v(5) gap w(5) gap x(5) */
+        static const uint8_t srcCols[23] = {
+            0x0C,0x50,0x50,0x50,0x3C, 0x00,  /* y + gap */
+            0x1C,0x20,0x40,0x20,0x1C, 0x00,  /* v + gap */
+            0x3C,0x40,0x30,0x40,0x3C, 0x00,  /* w + gap */
+            0x44,0x28,0x10,0x28,0x44          /* x       */
+        };
+
+        /* Nearest-neighbour column maps for compressed widths (no division) */
+        static const uint8_t map20[20] = {
+            0,1,2,3,4,5,6,8,9,10,11,12,13,15,16,17,18,19,20,22};
+        static const uint8_t map12[12] = {
+            0,2,4,6,8,10,12,14,16,18,20,22};
+
+        /* width = round(23*|cos(frame*30°)|), min 1 */
+        static const uint8_t frameWidth[12] = {
+            23,20,12,1, 12,20,23,20, 12,1,12,20};
+
+        static uint8_t spinFrame = 0;
+        uint8_t width    = frameWidth[spinFrame];
+        uint8_t reversed = (spinFrame >= 4 && spinFrame <= 8);
+        uint8_t *fb      = imgBuffer.data + 7 * 128;
+
+        /* Clear the 23-col region */
+        for (uint8_t i = 105; i < 128; i++) fb[i] = 0;
+
+        if (width == 1) {
+            /* Edge-on: thin vertical line at centre of region */
+            fb[116] = 0x7E;
+        } else {
+            const uint8_t *map = (width >= 23) ? (const uint8_t*)0
+                               : (width >= 20) ? map20
+                               :                 map12;
+            /* Centre the projected text within the 23-col region */
+            uint8_t startCol = (uint8_t)(105 + ((23 - width) >> 1));
+            for (uint8_t d = 0; d < width; d++) {
+                uint8_t src = map ? map[d] : d;
+                if (reversed) src = 22 - src;
+                fb[startCol + d] = srcCols[src];
+            }
+        }
+
+        spinFrame++;
+        if (spinFrame >= 12) spinFrame = 0;
+    }
 }
 
 void onCreate(PiPicoFxUiType*data)
