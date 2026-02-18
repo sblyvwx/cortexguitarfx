@@ -209,7 +209,7 @@ void core1Main()
             clearReleasedStickyBit(1);
         }
 
-       encoderDelta=getStickyIncrementDelta();
+       encoderDelta=consumeStickyIncrementDelta();
        if (encoderDelta != 0)
        {
             if (encoderDelta > 0)
@@ -221,7 +221,6 @@ void core1Main()
                 encoderDelta=-1;
             }
            onRotaryChange(encoderDelta,&piPicoUiController);
-           clearStickyIncrementDelta();
        }
 
         if (programChangeState == 3)
