@@ -306,7 +306,7 @@ void onUpdate(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUiType*
 
         if (width == 1) {
             /* Edge-on: thin vertical line at centre of region */
-            fb[116] = 0x7E;
+            fb[116] = (uint8_t)(0x7E >> 3);
         } else {
             const uint8_t *map = (width >= 23) ? (const uint8_t*)0
                                : (width >= 20) ? map20
@@ -316,7 +316,7 @@ void onUpdate(int16_t avgInput,int16_t avgOutput,uint8_t cpuLoad,PiPicoFxUiType*
             for (uint8_t d = 0; d < width; d++) {
                 uint8_t src = map ? map[d] : d;
                 if (reversed) src = 22 - src;
-                fb[startCol + d] = srcCols[src];
+                fb[startCol + d] = (uint8_t)(srcCols[src] >> 3);
             }
         }
 
