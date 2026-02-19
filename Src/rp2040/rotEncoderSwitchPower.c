@@ -95,10 +95,6 @@ void isr_c1_io_irq_bank0_irq13()
             }
             lastEncoderTransitionUs = nowUs;
         }
-        else
-        {
-            encoderPrevState = currentState;
-        }
     }
 
     if ((*POWERSENSE_INTR & (1 << POWERSENSE_EDGE_LOW)) == (1 << POWERSENSE_EDGE_LOW))
