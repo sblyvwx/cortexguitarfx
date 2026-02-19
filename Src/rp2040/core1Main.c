@@ -188,24 +188,24 @@ void core1Main()
         switchVals[0] = getSwitchValue(0);
         if ((switchVals[0] & 1) > 0)
         {
-            onEnterPressed(&piPicoUiController);
+            onExitPressed(&piPicoUiController);
             clearPressedStickyBit(0);
         }
         if((switchVals[0] & 2) > 0)
         {
-            onEnterReleased(&piPicoUiController);
+            onExitReleased(&piPicoUiController);
             clearReleasedStickyBit(0);
         }
 
         switchVals[1] = getSwitchValue(1);
         if ((switchVals[1] & 1) > 0)
         {
-            onExitPressed(&piPicoUiController);
+            onEnterPressed(&piPicoUiController);
             clearPressedStickyBit(1);
         }
         if ((switchVals[1] & 2) > 0)
         {
-            onExitReleased(&piPicoUiController);
+            onEnterReleased(&piPicoUiController);
             clearReleasedStickyBit(1);
         }
 
